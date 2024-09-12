@@ -1,6 +1,6 @@
 use crate::{
-    Message, MessageClient, MessageClientError, MessageConsumer, MessageConsumerFactory,
-    MessageConsumptionError, MessageConsumptionOutcome,
+    Message, MessageClientError, MessageConsumer, MessageConsumerFactory, MessageConsumptionError,
+    MessageConsumptionOutcome, MessageSubClient,
 };
 use async_trait::async_trait;
 use std::sync::Mutex;
@@ -26,13 +26,13 @@ impl Message for MockMessage {
     }
 }
 
-pub(crate) struct MockMessageClient {
+pub(crate) struct MockMessageSubClient {
     deleted: Mutex<Vec<<MockMessage as Message>::MessageId>>,
     requeued: Mutex<Vec<<MockMessage as Message>::MessageId>>,
     dlq: Mutex<Vec<<MockMessage as Message>::MessageId>>,
 }
 
-impl MockMessageClient {
+impl MockMessageSubClient {
     pub(crate) fn new() -> Self {
         Self {
             deleted: Mutex::new(Vec::new()),
@@ -55,7 +55,7 @@ impl MockMessageClient {
 }
 
 #[async_trait]
-impl MessageClient<MockMessage> for MockMessageClient {
+impl MessageSubClient<MockMessage> for MockMessageSubClient {
     async fn get_messages(&self) -> Result<Vec<MockMessage>, MessageClientError>
     where
         MockMessage: 'async_trait,
@@ -71,13 +71,6 @@ impl MessageClient<MockMessage> for MockMessageClient {
         MockMessage: 'async_trait,
     {
         self.deleted.lock().unwrap().push(*message_id);
-        Ok(())
-    }
-
-    async fn publish_message(&self, _message: MockMessage) -> Result<(), MessageClientError>
-    where
-        MockMessage: 'async_trait,
-    {
         Ok(())
     }
 

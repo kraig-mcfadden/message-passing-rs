@@ -31,22 +31,6 @@ pub trait MessageConsumer<M: Message>: Send + Sync {
         M: 'async_trait;
 }
 
-// handy implementation of a noop worker that will just ignore any message given to it
-pub struct IgnoreMessageConsumer;
-
-#[async_trait]
-impl<M: Message> MessageConsumer<M> for IgnoreMessageConsumer {
-    async fn consume(
-        &self,
-        _message: M,
-    ) -> Result<MessageConsumptionOutcome, MessageConsumptionError>
-    where
-        M: 'async_trait,
-    {
-        Ok(MessageConsumptionOutcome::Ignored)
-    }
-}
-
 pub trait MessageConsumerFactory<M: Message>: Send + Sync {
     fn consumer(&self, message_type: &M::MessageType) -> Option<&dyn MessageConsumer<M>>;
 }

@@ -7,18 +7,10 @@ pub enum MessageClientError {
     Unrecoverable, // requires human intervention, like a config issue
 }
 
-// This trait abstracts away queue or message bus interaction and serialization/deserialization.
+// This trait abstracts away message publishing, with serialization/deserialization.
 // Implementations will need to know the concrete queue or topic API as well as the message format
 #[async_trait]
-pub trait MessageClient<M: Message>: Send + Sync {
-    async fn get_messages(&self) -> Result<Vec<M>, MessageClientError>
-    where
-        M: 'async_trait;
-
-    async fn delete_message(&self, message_id: &M::MessageId) -> Result<(), MessageClientError>
-    where
-        M: 'async_trait;
-
+pub trait MessagePubClient<M: Message>: Send + Sync {
     async fn publish_message(&self, message: M) -> Result<(), MessageClientError>
     where
         M: 'async_trait;
@@ -34,6 +26,19 @@ pub trait MessageClient<M: Message>: Send + Sync {
         }
         results
     }
+}
+
+// This trait abstracts away message retrieval and disposal, with serialization/deserialization.
+// Implementations will need to know the concrete queue or topic API as well as the message format
+#[async_trait]
+pub trait MessageSubClient<M: Message>: Send + Sync {
+    async fn get_messages(&self) -> Result<Vec<M>, MessageClientError>
+    where
+        M: 'async_trait;
+
+    async fn delete_message(&self, message_id: &M::MessageId) -> Result<(), MessageClientError>
+    where
+        M: 'async_trait;
 
     // in some concrete technologies this will not require any action
     async fn requeue_message(&self, message_id: &M::MessageId) -> Result<(), MessageClientError>

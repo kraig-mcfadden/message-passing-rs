@@ -1,21 +1,21 @@
 use crate::{
-    Message, MessageClient, MessageConsumer, MessageConsumerFactory, MessageConsumptionError,
-    MessageConsumptionOutcome,
+    Message, MessageConsumer, MessageConsumerFactory, MessageConsumptionError,
+    MessageConsumptionOutcome, MessageSubClient,
 };
 use std::sync::Arc;
 
 pub struct Worker<M: Message> {
-    message_client: Arc<dyn MessageClient<M>>,
+    message_sub_client: Arc<dyn MessageSubClient<M>>,
     message_consumer_factory: Arc<dyn MessageConsumerFactory<M>>,
 }
 
 impl<M: Message> Worker<M> {
     pub fn new(
-        message_client: Arc<dyn MessageClient<M>>,
+        message_sub_client: Arc<dyn MessageSubClient<M>>,
         message_consumer_factory: Arc<dyn MessageConsumerFactory<M>>,
     ) -> Self {
         Self {
-            message_client,
+            message_sub_client,
             message_consumer_factory,
         }
     }
@@ -23,7 +23,7 @@ impl<M: Message> Worker<M> {
     // TODO: make number of worker processes to start be configurable -- or have a way to instantiate multiple workers
     pub async fn run(&self) {
         loop {
-            match self.message_client.get_messages().await {
+            match self.message_sub_client.get_messages().await {
                 Ok(messages) => {
                     self.process_messages(messages).await;
                 }
@@ -62,7 +62,7 @@ impl<M: Message> Worker<M> {
         match consumer.consume(message).await {
             Ok(MessageConsumptionOutcome::Succeeded) => {
                 log::info!("Successfully processed message {message_id:?}. Deleting.");
-                self.message_client
+                self.message_sub_client
                     .delete_message(&message_id)
                     .await
                     .map_err(|e| {
@@ -71,7 +71,7 @@ impl<M: Message> Worker<M> {
             }
             Ok(MessageConsumptionOutcome::Ignored) => {
                 log::debug!("Ignoring message {message_id:?}. Deleting.");
-                self.message_client
+                self.message_sub_client
                     .delete_message(&message_id)
                     .await
                     .map_err(|e| {
@@ -80,7 +80,7 @@ impl<M: Message> Worker<M> {
             }
             Err(MessageConsumptionError::Transient) => {
                 log::info!("Retrying transient error for message {message_id:?}.");
-                self.message_client
+                self.message_sub_client
                     .requeue_message(&message_id)
                     .await
                     .map_err(|e| {
@@ -89,7 +89,7 @@ impl<M: Message> Worker<M> {
             }
             Err(MessageConsumptionError::Unrecoverable) => {
                 log::info!("Sending unprocessable message {message_id:?} to dead letter queue.");
-                self.message_client
+                self.message_sub_client
                     .dlq_message(&message_id)
                     .await
                     .map_err(|e| {
@@ -105,13 +105,13 @@ impl<M: Message> Worker<M> {
 mod tests {
     use super::*;
     use crate::test_utils::{
-        MockMessage, MockMessageClient, MockMessageConsumer, MockMessageConsumerFactory,
+        MockMessage, MockMessageConsumer, MockMessageConsumerFactory, MockMessageSubClient,
     };
 
     #[tokio::test]
     async fn test_process_success() {
         // given
-        let mf = Arc::new(MockMessageClient::new());
+        let mf = Arc::new(MockMessageSubClient::new());
         let mcf = Arc::new(MockMessageConsumerFactory::new(
             MockMessageConsumer::return_ok(MessageConsumptionOutcome::Succeeded),
         ));
@@ -132,7 +132,7 @@ mod tests {
     #[tokio::test]
     async fn test_process_ignore() {
         // given
-        let mf = Arc::new(MockMessageClient::new());
+        let mf = Arc::new(MockMessageSubClient::new());
         let mcf = Arc::new(MockMessageConsumerFactory::new(
             MockMessageConsumer::return_ok(MessageConsumptionOutcome::Ignored),
         ));
@@ -153,7 +153,7 @@ mod tests {
     #[tokio::test]
     async fn test_process_err_transient() {
         // given
-        let mf = Arc::new(MockMessageClient::new());
+        let mf = Arc::new(MockMessageSubClient::new());
         let mcf = Arc::new(MockMessageConsumerFactory::new(
             MockMessageConsumer::return_err(MessageConsumptionError::Transient),
         ));
@@ -174,7 +174,7 @@ mod tests {
     #[tokio::test]
     async fn test_process_err_unrecoverable() {
         // given
-        let mf = Arc::new(MockMessageClient::new());
+        let mf = Arc::new(MockMessageSubClient::new());
         let mcf = Arc::new(MockMessageConsumerFactory::new(
             MockMessageConsumer::return_err(MessageConsumptionError::Unrecoverable),
         ));
