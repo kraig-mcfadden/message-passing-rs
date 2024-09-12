@@ -1,21 +1,21 @@
 use crate::{
-    Message, MessageConsumer, MessageConsumerFactory, MessageConsumptionError,
-    MessageConsumptionOutcome, MessageFactory,
+    Message, MessageClient, MessageConsumer, MessageConsumerFactory, MessageConsumptionError,
+    MessageConsumptionOutcome,
 };
 use std::sync::Arc;
 
 pub struct Worker<M: Message> {
-    message_factory: Arc<dyn MessageFactory<M>>,
+    message_client: Arc<dyn MessageClient<M>>,
     message_consumer_factory: Arc<dyn MessageConsumerFactory<M>>,
 }
 
 impl<M: Message> Worker<M> {
     pub fn new(
-        message_factory: Arc<dyn MessageFactory<M>>,
+        message_client: Arc<dyn MessageClient<M>>,
         message_consumer_factory: Arc<dyn MessageConsumerFactory<M>>,
     ) -> Self {
         Self {
-            message_factory,
+            message_client,
             message_consumer_factory,
         }
     }
@@ -23,7 +23,7 @@ impl<M: Message> Worker<M> {
     // TODO: make number of worker processes to start be configurable -- or have a way to instantiate multiple workers
     pub async fn run(&self) {
         loop {
-            match self.message_factory.get_messages().await {
+            match self.message_client.get_messages().await {
                 Ok(messages) => {
                     self.process_messages(messages).await;
                 }
@@ -62,7 +62,7 @@ impl<M: Message> Worker<M> {
         match consumer.consume(message).await {
             Ok(MessageConsumptionOutcome::Succeeded) => {
                 log::info!("Successfully processed message {message_id:?}. Deleting.");
-                self.message_factory
+                self.message_client
                     .delete_message(&message_id)
                     .await
                     .map_err(|e| {
@@ -71,7 +71,7 @@ impl<M: Message> Worker<M> {
             }
             Ok(MessageConsumptionOutcome::Ignored) => {
                 log::debug!("Ignoring message {message_id:?}. Deleting.");
-                self.message_factory
+                self.message_client
                     .delete_message(&message_id)
                     .await
                     .map_err(|e| {
@@ -80,7 +80,7 @@ impl<M: Message> Worker<M> {
             }
             Err(MessageConsumptionError::Transient) => {
                 log::info!("Retrying transient error for message {message_id:?}.");
-                self.message_factory
+                self.message_client
                     .requeue_message(&message_id)
                     .await
                     .map_err(|e| {
@@ -89,7 +89,7 @@ impl<M: Message> Worker<M> {
             }
             Err(MessageConsumptionError::Unrecoverable) => {
                 log::info!("Sending unprocessable message {message_id:?} to dead letter queue.");
-                self.message_factory
+                self.message_client
                     .dlq_message(&message_id)
                     .await
                     .map_err(|e| {
@@ -103,23 +103,18 @@ impl<M: Message> Worker<M> {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Mutex;
-
     use super::*;
-    use crate::MessageFactoryError;
-    use async_trait::async_trait;
+    use crate::test_utils::{
+        MockMessage, MockMessageClient, MockMessageConsumer, MockMessageConsumerFactory,
+    };
 
     #[tokio::test]
     async fn test_process_success() {
         // given
-        let mf = Arc::new(MockMessageFactory::new());
-        let mcf = Arc::new(MockMessageConsumerFactory {
-            consumer: MockMessageConsumer {
-                should_err: false,
-                err: MessageConsumptionError::Transient,
-                success: MessageConsumptionOutcome::Succeeded,
-            },
-        });
+        let mf = Arc::new(MockMessageClient::new());
+        let mcf = Arc::new(MockMessageConsumerFactory::new(
+            MockMessageConsumer::return_ok(MessageConsumptionOutcome::Succeeded),
+        ));
         let msg = MockMessage;
         let worker = Worker::new(mf.clone(), mcf.clone());
 
@@ -137,14 +132,10 @@ mod tests {
     #[tokio::test]
     async fn test_process_ignore() {
         // given
-        let mf = Arc::new(MockMessageFactory::new());
-        let mcf = Arc::new(MockMessageConsumerFactory {
-            consumer: MockMessageConsumer {
-                should_err: false,
-                err: MessageConsumptionError::Transient,
-                success: MessageConsumptionOutcome::Ignored,
-            },
-        });
+        let mf = Arc::new(MockMessageClient::new());
+        let mcf = Arc::new(MockMessageConsumerFactory::new(
+            MockMessageConsumer::return_ok(MessageConsumptionOutcome::Ignored),
+        ));
         let msg = MockMessage;
         let worker = Worker::new(mf.clone(), mcf.clone());
 
@@ -162,14 +153,10 @@ mod tests {
     #[tokio::test]
     async fn test_process_err_transient() {
         // given
-        let mf = Arc::new(MockMessageFactory::new());
-        let mcf = Arc::new(MockMessageConsumerFactory {
-            consumer: MockMessageConsumer {
-                should_err: true,
-                err: MessageConsumptionError::Transient,
-                success: MessageConsumptionOutcome::Succeeded,
-            },
-        });
+        let mf = Arc::new(MockMessageClient::new());
+        let mcf = Arc::new(MockMessageConsumerFactory::new(
+            MockMessageConsumer::return_err(MessageConsumptionError::Transient),
+        ));
         let msg = MockMessage;
         let worker = Worker::new(mf.clone(), mcf.clone());
 
@@ -187,14 +174,10 @@ mod tests {
     #[tokio::test]
     async fn test_process_err_unrecoverable() {
         // given
-        let mf = Arc::new(MockMessageFactory::new());
-        let mcf = Arc::new(MockMessageConsumerFactory {
-            consumer: MockMessageConsumer {
-                should_err: true,
-                err: MessageConsumptionError::Unrecoverable,
-                success: MessageConsumptionOutcome::Succeeded,
-            },
-        });
+        let mf = Arc::new(MockMessageClient::new());
+        let mcf = Arc::new(MockMessageConsumerFactory::new(
+            MockMessageConsumer::return_err(MessageConsumptionError::Unrecoverable),
+        ));
         let msg = MockMessage;
         let worker = Worker::new(mf.clone(), mcf.clone());
 
@@ -207,134 +190,5 @@ mod tests {
         assert!(res.is_ok());
         assert_eq!(mf.dlq().len(), 1);
         assert_eq!(mf.dlq().first().unwrap(), msg.message_id());
-    }
-
-    #[derive(Debug, Clone, Copy)]
-    struct MockMessage;
-
-    impl Message for MockMessage {
-        type MessageId = u32;
-        type MessageType = &'static str;
-        type MessageContent = MockMessage;
-
-        fn message_id(&self) -> &Self::MessageId {
-            &1
-        }
-
-        fn message_type(&self) -> &Self::MessageType {
-            &"foo"
-        }
-
-        fn content(&self) -> &Self::MessageContent {
-            self
-        }
-    }
-
-    struct MockMessageFactory {
-        deleted: Mutex<Vec<<MockMessage as Message>::MessageId>>,
-        requeued: Mutex<Vec<<MockMessage as Message>::MessageId>>,
-        dlq: Mutex<Vec<<MockMessage as Message>::MessageId>>,
-    }
-
-    impl MockMessageFactory {
-        fn new() -> Self {
-            Self {
-                deleted: Mutex::new(Vec::new()),
-                requeued: Mutex::new(Vec::new()),
-                dlq: Mutex::new(Vec::new()),
-            }
-        }
-
-        fn deleted(&self) -> Vec<<MockMessage as Message>::MessageId> {
-            self.deleted.lock().unwrap().clone()
-        }
-
-        fn requeued(&self) -> Vec<<MockMessage as Message>::MessageId> {
-            self.requeued.lock().unwrap().clone()
-        }
-
-        fn dlq(&self) -> Vec<<MockMessage as Message>::MessageId> {
-            self.dlq.lock().unwrap().clone()
-        }
-    }
-
-    #[async_trait]
-    impl MessageFactory<MockMessage> for MockMessageFactory {
-        async fn get_messages(&self) -> Result<Vec<MockMessage>, MessageFactoryError>
-        where
-            MockMessage: 'async_trait,
-        {
-            return Ok(vec![MockMessage]);
-        }
-
-        async fn delete_message(
-            &self,
-            message_id: &<MockMessage as Message>::MessageId,
-        ) -> Result<(), MessageFactoryError>
-        where
-            MockMessage: 'async_trait,
-        {
-            self.deleted.lock().unwrap().push(*message_id);
-            Ok(())
-        }
-
-        // in some concrete technologies this will not require any action
-        async fn requeue_message(
-            &self,
-            message_id: &<MockMessage as Message>::MessageId,
-        ) -> Result<(), MessageFactoryError>
-        where
-            MockMessage: 'async_trait,
-        {
-            self.requeued.lock().unwrap().push(*message_id);
-            Ok(())
-        }
-
-        async fn dlq_message(
-            &self,
-            message_id: &<MockMessage as Message>::MessageId,
-        ) -> Result<(), MessageFactoryError>
-        where
-            MockMessage: 'async_trait,
-        {
-            self.dlq.lock().unwrap().push(*message_id);
-            Ok(())
-        }
-    }
-
-    struct MockMessageConsumer {
-        should_err: bool,
-        err: MessageConsumptionError,
-        success: MessageConsumptionOutcome,
-    }
-
-    #[async_trait]
-    impl MessageConsumer<MockMessage> for MockMessageConsumer {
-        async fn consume(
-            &self,
-            _message: MockMessage,
-        ) -> Result<MessageConsumptionOutcome, MessageConsumptionError>
-        where
-            MockMessage: 'async_trait,
-        {
-            if self.should_err {
-                Err(self.err.clone())
-            } else {
-                Ok(self.success.clone())
-            }
-        }
-    }
-
-    struct MockMessageConsumerFactory {
-        consumer: MockMessageConsumer,
-    }
-
-    impl MessageConsumerFactory<MockMessage> for MockMessageConsumerFactory {
-        fn consumer(
-            &self,
-            _message_type: &<MockMessage as Message>::MessageType,
-        ) -> Option<&dyn MessageConsumer<MockMessage>> {
-            Some(&self.consumer)
-        }
     }
 }

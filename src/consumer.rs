@@ -50,31 +50,3 @@ impl<M: Message> MessageConsumer<M> for IgnoreMessageConsumer {
 pub trait MessageConsumerFactory<M: Message>: Send + Sync {
     fn consumer(&self, message_type: &M::MessageType) -> Option<&dyn MessageConsumer<M>>;
 }
-
-#[derive(Debug)]
-pub enum MessageFactoryError {
-    Transient,     // can be retried in a bit, like a network issue
-    Unrecoverable, // requires human intervention, like a config issue
-}
-
-// This trait abstracts away fetching and parsing logic. Implementations will need to
-// know the concrete queue or topic API as well as the message format
-#[async_trait]
-pub trait MessageFactory<M: Message>: Send + Sync {
-    async fn get_messages(&self) -> Result<Vec<M>, MessageFactoryError>
-    where
-        M: 'async_trait;
-
-    async fn delete_message(&self, message_id: &M::MessageId) -> Result<(), MessageFactoryError>
-    where
-        M: 'async_trait;
-
-    // in some concrete technologies this will not require any action
-    async fn requeue_message(&self, message_id: &M::MessageId) -> Result<(), MessageFactoryError>
-    where
-        M: 'async_trait;
-
-    async fn dlq_message(&self, message_id: &M::MessageId) -> Result<(), MessageFactoryError>
-    where
-        M: 'async_trait;
-}
