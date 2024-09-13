@@ -2,18 +2,17 @@ use crate::{Message, MessageConsumer, MessageConsumptionError, MessageConsumptio
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use std::hash::Hash;
 use std::sync::Mutex;
 use std::{collections::HashMap, sync::Arc};
 use uuid::Uuid;
 
-pub struct MessageConsumerImpl<MessageType, MessageData> {
-    message_content_consumer_factory: MessageContentConsumerFactory<MessageType, MessageData>,
+pub struct MessageConsumerImpl<MessageData> {
+    message_content_consumer_factory: MessageContentConsumerFactory<MessageData>,
 }
 
-impl<MessageType, MessageData> MessageConsumerImpl<MessageType, MessageData> {
+impl<MessageData> MessageConsumerImpl<MessageData> {
     pub fn new(
-        message_content_consumer_factory: MessageContentConsumerFactory<MessageType, MessageData>,
+        message_content_consumer_factory: MessageContentConsumerFactory<MessageData>,
     ) -> Self {
         Self {
             message_content_consumer_factory,
@@ -22,11 +21,8 @@ impl<MessageType, MessageData> MessageConsumerImpl<MessageType, MessageData> {
 }
 
 #[async_trait]
-impl<
-        M: Message,
-        MessageType: Send + Sync + Eq + PartialEq + Hash + Serialize + DeserializeOwned,
-        MessageData: Send + Sync + Serialize + DeserializeOwned,
-    > MessageConsumer<M> for MessageConsumerImpl<MessageType, MessageData>
+impl<M: Message, MessageData: Send + Sync + Serialize + DeserializeOwned> MessageConsumer<M>
+    for MessageConsumerImpl<MessageData>
 where
     M::MessageContent: ToString,
 {
@@ -53,14 +49,14 @@ where
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MessageContent<MessageType, MessageData> {
+pub struct MessageContent<MessageData> {
     id: Uuid,
-    event_type: MessageType,
+    event_type: String,
     event_at: DateTime<Utc>,
     data: MessageData,
 }
 
-impl<MT: Serialize + DeserializeOwned, MD: Serialize + DeserializeOwned> MessageContent<MT, MD> {
+impl<MD: Serialize + DeserializeOwned> MessageContent<MD> {
     pub fn from_json(json_str: &str) -> Result<Self, String> {
         serde_json::from_str(json_str).map_err(|e| e.to_string())
     }
@@ -71,25 +67,22 @@ impl<MT: Serialize + DeserializeOwned, MD: Serialize + DeserializeOwned> Message
 }
 
 #[async_trait]
-pub trait MessageContentConsumer<MessageType, MessageData>: Send + Sync {
+pub trait MessageContentConsumer<MessageData>: Send + Sync {
     async fn consume(
         &self,
-        msg: MessageContent<MessageType, MessageData>,
+        msg: MessageContent<MessageData>,
     ) -> Result<MessageConsumptionOutcome, MessageConsumptionError>;
 }
 
 type ThreadSafeMutableState<T> = Arc<Mutex<T>>;
-type Consumers<MessageType, MessageData> =
-    HashMap<MessageType, Arc<dyn MessageContentConsumer<MessageType, MessageData>>>;
+type Consumers<MessageData> = HashMap<String, Arc<dyn MessageContentConsumer<MessageData>>>;
 
 #[derive(Default)]
-pub struct MessageContentConsumerFactory<MessageType, MessageData> {
-    consumers: ThreadSafeMutableState<Consumers<MessageType, MessageData>>,
+pub struct MessageContentConsumerFactory<MessageData> {
+    consumers: ThreadSafeMutableState<Consumers<MessageData>>,
 }
 
-impl<MessageType: PartialEq + Eq + Hash, MessageData>
-    MessageContentConsumerFactory<MessageType, MessageData>
-{
+impl<MessageData> MessageContentConsumerFactory<MessageData> {
     pub fn new() -> Self {
         Self {
             consumers: Arc::new(Mutex::new(HashMap::new())),
@@ -98,20 +91,20 @@ impl<MessageType: PartialEq + Eq + Hash, MessageData>
 
     pub fn add_consumer(
         &mut self,
-        message_type: MessageType,
-        consumer: Arc<dyn MessageContentConsumer<MessageType, MessageData>>,
+        message_type: impl Into<String>,
+        consumer: Arc<dyn MessageContentConsumer<MessageData>>,
     ) -> &mut Self {
         self.consumers
             .lock()
             .unwrap()
-            .insert(message_type, consumer);
+            .insert(message_type.into(), consumer);
         self
     }
 
     pub fn consumer(
         &self,
-        message_type: &MessageType,
-    ) -> Option<Arc<dyn MessageContentConsumer<MessageType, MessageData>>> {
+        message_type: &str,
+    ) -> Option<Arc<dyn MessageContentConsumer<MessageData>>> {
         let map = self.consumers.lock().unwrap();
         map.get(message_type).cloned()
     }
