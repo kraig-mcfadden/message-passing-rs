@@ -8,11 +8,11 @@ pub struct MessageClientImplSns {
 }
 
 impl MessageClientImplSns {
-    pub async fn init(topic_arn: String) -> Self {
+    pub async fn init(topic_arn: impl Into<String>) -> Self {
         let config = aws_config::load_from_env().await;
         Self {
             sns_client: Client::new(&config),
-            topic_arn,
+            topic_arn: topic_arn.into(),
         }
     }
 }
