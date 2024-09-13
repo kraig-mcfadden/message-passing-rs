@@ -107,10 +107,10 @@ impl<MessageData> MessageContentConsumerFactory<MessageData> {
     }
 
     pub fn add_consumer(
-        &mut self,
+        self,
         message_type: impl Into<String>,
         consumer: Arc<dyn MessageContentConsumer<MessageData>>,
-    ) -> &mut Self {
+    ) -> Self {
         self.consumers
             .lock()
             .unwrap()
