@@ -1,5 +1,4 @@
-use super::MessageImplSns;
-use crate::{Message, MessageClientError, MessagePubClient};
+use crate::{MessageClientError, MessagePubClient};
 use async_trait::async_trait;
 use aws_sdk_sns::{types::PublishBatchRequestEntry, Client};
 
@@ -19,14 +18,11 @@ impl MessageClientImplSns {
 }
 
 #[async_trait]
-impl MessagePubClient<MessageImplSns> for MessageClientImplSns {
+impl MessagePubClient<String> for MessageClientImplSns {
     // TODO: error handling in unrecoverable case
-    async fn publish_message(
-        &self,
-        message: <MessageImplSns as Message>::MessageContent,
-    ) -> Result<(), MessageClientError>
+    async fn publish_message(&self, message: String) -> Result<(), MessageClientError>
     where
-        MessageImplSns: 'async_trait,
+        String: 'async_trait,
     {
         self.sns_client
             .publish()
@@ -39,12 +35,9 @@ impl MessagePubClient<MessageImplSns> for MessageClientImplSns {
     }
 
     // TODO: error handling in unrecoverable case
-    async fn publish_messages(
-        &self,
-        messages: Vec<<MessageImplSns as Message>::MessageContent>,
-    ) -> Vec<Result<(), MessageClientError>>
+    async fn publish_messages(&self, messages: Vec<String>) -> Vec<Result<(), MessageClientError>>
     where
-        MessageImplSns: 'async_trait,
+        String: 'async_trait,
     {
         let entries: Vec<PublishBatchRequestEntry> = messages
             .iter()

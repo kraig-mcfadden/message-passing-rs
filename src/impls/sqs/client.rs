@@ -25,14 +25,14 @@ impl MessageClientImplSqs {
 }
 
 #[async_trait]
-impl MessagePubClient<MessageImplSqs> for MessageClientImplSqs {
+impl MessagePubClient<<MessageImplSqs as Message>::MessageContent> for MessageClientImplSqs {
     // TODO: error handling in unrecoverable case
     async fn publish_message(
         &self,
         message: <MessageImplSqs as Message>::MessageContent,
     ) -> Result<(), MessageClientError>
     where
-        MessageImplSqs: 'async_trait,
+        <MessageImplSqs as Message>::MessageContent: 'async_trait,
     {
         self.sqs_client
             .send_message()
@@ -50,7 +50,7 @@ impl MessagePubClient<MessageImplSqs> for MessageClientImplSqs {
         messages: Vec<<MessageImplSqs as Message>::MessageContent>,
     ) -> Vec<Result<(), MessageClientError>>
     where
-        MessageImplSqs: 'async_trait,
+        <MessageImplSqs as Message>::MessageContent: 'async_trait,
     {
         let entries: Vec<SendMessageBatchRequestEntry> = messages
             .iter()

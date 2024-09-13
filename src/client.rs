@@ -10,18 +10,15 @@ pub enum MessageClientError {
 // This trait abstracts away message publishing, with serialization/deserialization.
 // Implementations will need to know the concrete queue or topic API as well as the message format
 #[async_trait]
-pub trait MessagePubClient<M: Message>: Send + Sync {
-    async fn publish_message(&self, message: M::MessageContent) -> Result<(), MessageClientError>
+pub trait MessagePubClient<T: Send + Sync>: Send + Sync {
+    async fn publish_message(&self, message: T) -> Result<(), MessageClientError>
     where
-        M: 'async_trait;
+        T: 'async_trait;
 
     // default implementation in case concrete technologies don't allow batch publishing
-    async fn publish_messages(
-        &self,
-        messages: Vec<M::MessageContent>,
-    ) -> Vec<Result<(), MessageClientError>>
+    async fn publish_messages(&self, messages: Vec<T>) -> Vec<Result<(), MessageClientError>>
     where
-        M: 'async_trait,
+        T: 'async_trait,
     {
         let mut results = Vec::with_capacity(messages.len());
         for message in messages {
