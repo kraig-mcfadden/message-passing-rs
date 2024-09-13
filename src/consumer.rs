@@ -25,12 +25,8 @@ pub enum MessageConsumptionError {
 pub trait MessageConsumer<M: Message>: Send + Sync {
     async fn consume(
         &self,
-        message: M,
+        message: &M,
     ) -> Result<MessageConsumptionOutcome, MessageConsumptionError>
     where
         M: 'async_trait;
-}
-
-pub trait MessageConsumerFactory<M: Message>: Send + Sync {
-    fn consumer(&self, message_type: &M::MessageType) -> Option<&dyn MessageConsumer<M>>;
 }

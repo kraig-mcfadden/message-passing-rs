@@ -5,9 +5,22 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+sqs = ["dep:aws-config", "dep:aws-sdk-sqs"]
+sns = ["dep:aws-config", "dep:aws-sdk-sns"]
+message_format = ["dep:chrono", "dep:serde", "dep:serde_json", "dep:uuid"]
+
 [dependencies]
 async-trait = "0.1"
 log = "0.4"
+
+aws-config = { version = "1", features = ["behavior-version-latest"], optional = true }
+aws-sdk-sqs = { version = "1", optional = true }
+aws-sdk-sns = { version = "1", optional = true }
+chrono = { version = "0.4", features = ["serde"], optional = true }
+serde = { version = "1", features = ["derive"], optional = true }
+serde_json = { version = "1", optional = true }
+uuid = { version = "1", features = ["serde", "v4"], optional = true }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["rt", "macros"] }

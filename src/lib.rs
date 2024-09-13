@@ -6,6 +6,7 @@ pub use client::*;
 pub use consumer::*;
 pub use message::*;
 
+pub mod impls;
 pub mod worker;
 
 #[cfg(test)]

@@ -1,5 +1,5 @@
 use crate::{
-    Message, MessageClientError, MessageConsumer, MessageConsumerFactory, MessageConsumptionError,
+    Message, MessageClientError, MessageConsumer, MessageConsumptionError,
     MessageConsumptionOutcome, MessageSubClient,
 };
 use async_trait::async_trait;
@@ -10,17 +10,11 @@ pub(crate) struct MockMessage;
 
 impl Message for MockMessage {
     type MessageId = u32;
-    type MessageType = &'static str;
     type MessageContent = MockMessage;
 
     fn message_id(&self) -> &Self::MessageId {
         &1
     }
-
-    fn message_type(&self) -> &Self::MessageType {
-        &"foo"
-    }
-
     fn content(&self) -> &Self::MessageContent {
         self
     }
@@ -86,14 +80,11 @@ impl MessageSubClient<MockMessage> for MockMessageSubClient {
         Ok(())
     }
 
-    async fn dlq_message(
-        &self,
-        message_id: &<MockMessage as Message>::MessageId,
-    ) -> Result<(), MessageClientError>
+    async fn dlq_message(&self, message: &MockMessage) -> Result<(), MessageClientError>
     where
         MockMessage: 'async_trait,
     {
-        self.dlq.lock().unwrap().push(*message_id);
+        self.dlq.lock().unwrap().push(*message.message_id());
         Ok(())
     }
 }
@@ -126,7 +117,7 @@ impl MockMessageConsumer {
 impl MessageConsumer<MockMessage> for MockMessageConsumer {
     async fn consume(
         &self,
-        _message: MockMessage,
+        _message: &MockMessage,
     ) -> Result<MessageConsumptionOutcome, MessageConsumptionError>
     where
         MockMessage: 'async_trait,
@@ -136,24 +127,5 @@ impl MessageConsumer<MockMessage> for MockMessageConsumer {
         } else {
             Ok(self.ok.clone())
         }
-    }
-}
-
-pub(crate) struct MockMessageConsumerFactory {
-    consumer: MockMessageConsumer,
-}
-
-impl MockMessageConsumerFactory {
-    pub(crate) fn new(consumer: MockMessageConsumer) -> Self {
-        Self { consumer }
-    }
-}
-
-impl MessageConsumerFactory<MockMessage> for MockMessageConsumerFactory {
-    fn consumer(
-        &self,
-        _message_type: &<MockMessage as Message>::MessageType,
-    ) -> Option<&dyn MessageConsumer<MockMessage>> {
-        Some(&self.consumer)
     }
 }

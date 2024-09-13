@@ -11,12 +11,15 @@ pub enum MessageClientError {
 // Implementations will need to know the concrete queue or topic API as well as the message format
 #[async_trait]
 pub trait MessagePubClient<M: Message>: Send + Sync {
-    async fn publish_message(&self, message: M) -> Result<(), MessageClientError>
+    async fn publish_message(&self, message: M::MessageContent) -> Result<(), MessageClientError>
     where
         M: 'async_trait;
 
     // default implementation in case concrete technologies don't allow batch publishing
-    async fn publish_messages(&self, messages: Vec<M>) -> Vec<Result<(), MessageClientError>>
+    async fn publish_messages(
+        &self,
+        messages: Vec<M::MessageContent>,
+    ) -> Vec<Result<(), MessageClientError>>
     where
         M: 'async_trait,
     {
@@ -45,7 +48,7 @@ pub trait MessageSubClient<M: Message>: Send + Sync {
     where
         M: 'async_trait;
 
-    async fn dlq_message(&self, message_id: &M::MessageId) -> Result<(), MessageClientError>
+    async fn dlq_message(&self, message_id: &M) -> Result<(), MessageClientError>
     where
         M: 'async_trait;
 }
