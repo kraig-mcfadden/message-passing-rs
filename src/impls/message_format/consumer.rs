@@ -36,7 +36,7 @@ where
         if let Ok(message_content) = MessageContent::from_json(&message.content().to_string()) {
             if let Some(consumer) = self
                 .message_content_consumer_factory
-                .consumer(&message_content.event_type)
+                .consumer(&message_content.message_type)
             {
                 consumer.consume(message_content).await
             } else {
@@ -51,24 +51,24 @@ where
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MessageContent<MessageData> {
     id: Uuid,
-    event_type: String,
-    event_at: DateTime<Utc>,
-    published_at: DateTime<Utc>,
+    message_type: String,
+    message_at: DateTime<Utc>, // when the action took place that triggered the message
+    published_at: DateTime<Utc>, // when the message was actually published (may be later than the action itself)
     data: MessageData,
 }
 
 impl<MD: Serialize + DeserializeOwned> MessageContent<MD> {
     // will assign an id, so be sure to clone if you intend to reuse the same message
     pub fn create(
-        event_type: impl Into<String>,
-        event_at: DateTime<Utc>,
+        message_type: impl Into<String>,
+        message_at: DateTime<Utc>,
         published_at: DateTime<Utc>,
         data: MD,
     ) -> Self {
         Self {
             id: Uuid::new_v4(),
-            event_type: event_type.into(),
-            event_at,
+            message_type: message_type.into(),
+            message_at,
             published_at,
             data,
         }
