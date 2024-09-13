@@ -53,16 +53,23 @@ pub struct MessageContent<MessageData> {
     id: Uuid,
     event_type: String,
     event_at: DateTime<Utc>,
+    published_at: DateTime<Utc>,
     data: MessageData,
 }
 
 impl<MD: Serialize + DeserializeOwned> MessageContent<MD> {
     // will assign an id, so be sure to clone if you intend to reuse the same message
-    pub fn create(event_type: impl Into<String>, event_at: DateTime<Utc>, data: MD) -> Self {
+    pub fn create(
+        event_type: impl Into<String>,
+        event_at: DateTime<Utc>,
+        published_at: DateTime<Utc>,
+        data: MD,
+    ) -> Self {
         Self {
             id: Uuid::new_v4(),
             event_type: event_type.into(),
             event_at,
+            published_at,
             data,
         }
     }
