@@ -11,6 +11,16 @@ pub struct MessageConsumerImpl<MessageType, MessageData> {
     message_content_consumer_factory: MessageContentConsumerFactory<MessageType, MessageData>,
 }
 
+impl<MessageType, MessageData> MessageConsumerImpl<MessageType, MessageData> {
+    pub fn new(
+        message_content_consumer_factory: MessageContentConsumerFactory<MessageType, MessageData>,
+    ) -> Self {
+        Self {
+            message_content_consumer_factory,
+        }
+    }
+}
+
 #[async_trait]
 impl<
         M: Message,
