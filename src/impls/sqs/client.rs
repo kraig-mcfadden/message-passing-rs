@@ -12,12 +12,12 @@ pub struct MessageClientImplSqs {
 }
 
 impl MessageClientImplSqs {
-    pub async fn init(queue_url: String, dlq_url: String) -> Self {
+    pub async fn init(queue_url: impl Into<String>, dlq_url: impl Into<String>) -> Self {
         let config = aws_config::load_from_env().await;
         Self {
             sqs_client: Client::new(&config),
-            queue_url,
-            dlq_url,
+            queue_url: queue_url.into(),
+            dlq_url: dlq_url.into(),
             max_number_of_messages: 10,
             wait_time_seconds: 20,
         }
