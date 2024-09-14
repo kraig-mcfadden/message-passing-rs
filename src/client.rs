@@ -45,7 +45,7 @@ pub trait MessageSubClient<M: Message>: Send + Sync {
     where
         M: 'async_trait;
 
-    async fn dlq_message(&self, message_id: &M) -> Result<(), MessageClientError>
+    async fn dlq_message(&self, message: &M) -> Result<(), MessageClientError>
     where
         M: 'async_trait;
 }
