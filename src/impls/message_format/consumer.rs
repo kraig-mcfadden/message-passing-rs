@@ -52,13 +52,35 @@ pub struct MessageContent<MessageData> {
     data: MessageData,
 }
 
-impl<MD: Serialize + DeserializeOwned> MessageContent<MD> {
+impl<MessageData> MessageContent<MessageData> {
+    pub fn id(&self) -> &Uuid {
+        &self.id
+    }
+
+    pub fn message_type(&self) -> &str {
+        &self.message_type
+    }
+
+    pub fn message_at(&self) -> &DateTime<Utc> {
+        &self.message_at
+    }
+
+    pub fn published_at(&self) -> &DateTime<Utc> {
+        &self.published_at
+    }
+
+    pub fn data(&self) -> &MessageData {
+        &self.data
+    }
+}
+
+impl<MessageData: Serialize + DeserializeOwned> MessageContent<MessageData> {
     // will assign an id, so be sure to clone if you intend to reuse the same message
     pub fn create(
         message_type: impl Into<String>,
         message_at: DateTime<Utc>,
         published_at: DateTime<Utc>,
-        data: MD,
+        data: MessageData,
     ) -> Self {
         Self {
             id: Uuid::new_v4(),
