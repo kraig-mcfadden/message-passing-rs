@@ -3,6 +3,7 @@ use crate::{
 };
 use std::sync::Arc;
 
+#[derive(Clone)]
 pub struct Worker {
     message_sub_client: Arc<dyn MessageSubClient>,
     message_consumer: Arc<dyn MessageConsumer>,
