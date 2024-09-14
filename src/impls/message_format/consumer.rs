@@ -21,19 +21,14 @@ impl<MessageData> MessageConsumerImpl<MessageData> {
 }
 
 #[async_trait]
-impl<M: Message, MessageData: Send + Sync + Serialize + DeserializeOwned> MessageConsumer<M>
+impl<MessageData: Send + Sync + Serialize + DeserializeOwned> MessageConsumer
     for MessageConsumerImpl<MessageData>
-where
-    M::MessageContent: ToString,
 {
     async fn consume(
         &self,
-        message: &M,
-    ) -> Result<MessageConsumptionOutcome, MessageConsumptionError>
-    where
-        M: 'async_trait,
-    {
-        if let Ok(message_content) = MessageContent::from_json(&message.content().to_string()) {
+        message: &Message,
+    ) -> Result<MessageConsumptionOutcome, MessageConsumptionError> {
+        if let Ok(message_content) = MessageContent::from_json(message.content()) {
             if let Some(consumer) = self
                 .message_content_consumer_factory
                 .consumer(&message_content.message_type)

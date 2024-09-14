@@ -1,9 +1,24 @@
 use std::fmt::Debug;
 
-pub trait Message: Send + Sync + Debug + Clone {
-    type MessageId: Send + Sync + Debug + Clone;
-    type MessageContent: Send + Sync + Debug + Clone;
+#[derive(Debug, Clone)]
+pub struct Message {
+    id: String,
+    content: String,
+}
 
-    fn message_id(&self) -> &Self::MessageId;
-    fn content(&self) -> &Self::MessageContent;
+impl Message {
+    pub fn new(id: impl Into<String>, content: impl Into<String>) -> Self {
+        Self {
+            id: id.into(),
+            content: content.into(),
+        }
+    }
+
+    pub fn id(&self) -> &str {
+        &self.id
+    }
+
+    pub fn content(&self) -> &str {
+        &self.content
+    }
 }

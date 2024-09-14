@@ -5,25 +5,10 @@ use crate::{
 use async_trait::async_trait;
 use std::sync::Mutex;
 
-#[derive(Debug, Clone, Copy)]
-pub(crate) struct MockMessage;
-
-impl Message for MockMessage {
-    type MessageId = u32;
-    type MessageContent = MockMessage;
-
-    fn message_id(&self) -> &Self::MessageId {
-        &1
-    }
-    fn content(&self) -> &Self::MessageContent {
-        self
-    }
-}
-
 pub(crate) struct MockMessageSubClient {
-    deleted: Mutex<Vec<<MockMessage as Message>::MessageId>>,
-    requeued: Mutex<Vec<<MockMessage as Message>::MessageId>>,
-    dlq: Mutex<Vec<<MockMessage as Message>::MessageId>>,
+    deleted: Mutex<Vec<String>>,
+    requeued: Mutex<Vec<String>>,
+    dlq: Mutex<Vec<String>>,
 }
 
 impl MockMessageSubClient {
@@ -35,56 +20,38 @@ impl MockMessageSubClient {
         }
     }
 
-    pub(crate) fn deleted(&self) -> Vec<<MockMessage as Message>::MessageId> {
+    pub(crate) fn deleted(&self) -> Vec<String> {
         self.deleted.lock().unwrap().clone()
     }
 
-    pub(crate) fn requeued(&self) -> Vec<<MockMessage as Message>::MessageId> {
+    pub(crate) fn requeued(&self) -> Vec<String> {
         self.requeued.lock().unwrap().clone()
     }
 
-    pub(crate) fn dlq(&self) -> Vec<<MockMessage as Message>::MessageId> {
+    pub(crate) fn dlq(&self) -> Vec<String> {
         self.dlq.lock().unwrap().clone()
     }
 }
 
 #[async_trait]
-impl MessageSubClient<MockMessage> for MockMessageSubClient {
-    async fn get_messages(&self) -> Result<Vec<MockMessage>, MessageClientError>
-    where
-        MockMessage: 'async_trait,
-    {
-        return Ok(vec![MockMessage]);
+impl MessageSubClient for MockMessageSubClient {
+    async fn get_messages(&self) -> Result<Vec<Message>, MessageClientError> {
+        return Ok(vec![Message::new("foo", "bar")]);
     }
 
-    async fn delete_message(
-        &self,
-        message_id: &<MockMessage as Message>::MessageId,
-    ) -> Result<(), MessageClientError>
-    where
-        MockMessage: 'async_trait,
-    {
-        self.deleted.lock().unwrap().push(*message_id);
+    async fn delete_message(&self, message_id: &str) -> Result<(), MessageClientError> {
+        self.deleted.lock().unwrap().push(message_id.to_string());
         Ok(())
     }
 
     // in some concrete technologies this will not require any action
-    async fn requeue_message(
-        &self,
-        message_id: &<MockMessage as Message>::MessageId,
-    ) -> Result<(), MessageClientError>
-    where
-        MockMessage: 'async_trait,
-    {
-        self.requeued.lock().unwrap().push(*message_id);
+    async fn requeue_message(&self, message_id: &str) -> Result<(), MessageClientError> {
+        self.requeued.lock().unwrap().push(message_id.to_string());
         Ok(())
     }
 
-    async fn dlq_message(&self, message: &MockMessage) -> Result<(), MessageClientError>
-    where
-        MockMessage: 'async_trait,
-    {
-        self.dlq.lock().unwrap().push(*message.message_id());
+    async fn dlq_message(&self, message: &Message) -> Result<(), MessageClientError> {
+        self.dlq.lock().unwrap().push(message.id().to_string());
         Ok(())
     }
 }
@@ -114,14 +81,11 @@ impl MockMessageConsumer {
 }
 
 #[async_trait]
-impl MessageConsumer<MockMessage> for MockMessageConsumer {
+impl MessageConsumer for MockMessageConsumer {
     async fn consume(
         &self,
-        _message: &MockMessage,
-    ) -> Result<MessageConsumptionOutcome, MessageConsumptionError>
-    where
-        MockMessage: 'async_trait,
-    {
+        _message: &Message,
+    ) -> Result<MessageConsumptionOutcome, MessageConsumptionError> {
         if self.should_err {
             Err(self.err.clone())
         } else {

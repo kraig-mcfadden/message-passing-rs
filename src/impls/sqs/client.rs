@@ -1,4 +1,3 @@
-use super::MessageImplSqs;
 use crate::{Message, MessageClientError, MessagePubClient, MessageSubClient};
 use async_trait::async_trait;
 use aws_sdk_sqs::{types::SendMessageBatchRequestEntry, Client};
@@ -25,15 +24,9 @@ impl MessageClientImplSqs {
 }
 
 #[async_trait]
-impl MessagePubClient<<MessageImplSqs as Message>::MessageContent> for MessageClientImplSqs {
+impl MessagePubClient<String> for MessageClientImplSqs {
     // TODO: error handling in unrecoverable case
-    async fn publish_message(
-        &self,
-        message: <MessageImplSqs as Message>::MessageContent,
-    ) -> Result<(), MessageClientError>
-    where
-        <MessageImplSqs as Message>::MessageContent: 'async_trait,
-    {
+    async fn publish_message(&self, message: String) -> Result<(), MessageClientError> {
         self.sqs_client
             .send_message()
             .queue_url(&self.queue_url)
@@ -45,13 +38,7 @@ impl MessagePubClient<<MessageImplSqs as Message>::MessageContent> for MessageCl
     }
 
     // TODO: error handling in unrecoverable case
-    async fn publish_messages(
-        &self,
-        messages: Vec<<MessageImplSqs as Message>::MessageContent>,
-    ) -> Vec<Result<(), MessageClientError>>
-    where
-        <MessageImplSqs as Message>::MessageContent: 'async_trait,
-    {
+    async fn publish_messages(&self, messages: Vec<String>) -> Vec<Result<(), MessageClientError>> {
         let entries: Vec<SendMessageBatchRequestEntry> = messages
             .iter()
             .map(|message| {
@@ -75,12 +62,9 @@ impl MessagePubClient<<MessageImplSqs as Message>::MessageContent> for MessageCl
 }
 
 #[async_trait]
-impl MessageSubClient<MessageImplSqs> for MessageClientImplSqs {
+impl MessageSubClient for MessageClientImplSqs {
     // TODO: error handling in unrecoverable case
-    async fn get_messages(&self) -> Result<Vec<MessageImplSqs>, MessageClientError>
-    where
-        MessageImplSqs: 'async_trait,
-    {
+    async fn get_messages(&self) -> Result<Vec<Message>, MessageClientError> {
         let messages = self
             .sqs_client
             .receive_message()
@@ -93,19 +77,13 @@ impl MessageSubClient<MessageImplSqs> for MessageClientImplSqs {
             .messages
             .unwrap_or_default()
             .drain(..)
-            .map(MessageImplSqs::from)
+            .map(Message::from)
             .collect();
         Ok(messages)
     }
 
     // TODO: error handling in unrecoverable case
-    async fn delete_message(
-        &self,
-        message_id: &<MessageImplSqs as Message>::MessageId,
-    ) -> Result<(), MessageClientError>
-    where
-        MessageImplSqs: 'async_trait,
-    {
+    async fn delete_message(&self, message_id: &str) -> Result<(), MessageClientError> {
         self.sqs_client
             .delete_message()
             .queue_url(&self.queue_url)
@@ -116,21 +94,12 @@ impl MessageSubClient<MessageImplSqs> for MessageClientImplSqs {
         Ok(())
     }
 
-    async fn requeue_message(
-        &self,
-        _message_id: &<MessageImplSqs as Message>::MessageId,
-    ) -> Result<(), MessageClientError>
-    where
-        MessageImplSqs: 'async_trait,
-    {
+    async fn requeue_message(&self, _message_id: &str) -> Result<(), MessageClientError> {
         // don't need to do anything for SQS to requeue
         Ok(())
     }
 
-    async fn dlq_message(&self, message: &MessageImplSqs) -> Result<(), MessageClientError>
-    where
-        MessageImplSqs: 'async_trait,
-    {
+    async fn dlq_message(&self, message: &Message) -> Result<(), MessageClientError> {
         self.sqs_client
             .send_message()
             .queue_url(&self.dlq_url)

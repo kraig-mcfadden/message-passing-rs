@@ -3,15 +3,15 @@ use crate::{
 };
 use std::sync::Arc;
 
-pub struct Worker<M: Message> {
-    message_sub_client: Arc<dyn MessageSubClient<M>>,
-    message_consumer: Arc<dyn MessageConsumer<M>>,
+pub struct Worker {
+    message_sub_client: Arc<dyn MessageSubClient>,
+    message_consumer: Arc<dyn MessageConsumer>,
 }
 
-impl<M: Message> Worker<M> {
+impl Worker {
     pub fn new(
-        message_sub_client: Arc<dyn MessageSubClient<M>>,
-        message_consumer: Arc<dyn MessageConsumer<M>>,
+        message_sub_client: Arc<dyn MessageSubClient>,
+        message_consumer: Arc<dyn MessageConsumer>,
     ) -> Self {
         Self {
             message_sub_client,
@@ -34,22 +34,22 @@ impl<M: Message> Worker<M> {
     }
 
     // TODO: allow concurrency -- i.e. how many messages to process at once -- to be configurable
-    async fn process_messages(&self, messages: Vec<M>) {
+    async fn process_messages(&self, messages: Vec<Message>) {
         for message in messages {
-            let res = self.process_message(message).await;
+            let res = self.process_message(&message).await;
             if let Err(msg) = res {
                 log::error!("Error during message consumption: {msg}");
             }
         }
     }
 
-    async fn process_message(&self, message: M) -> Result<(), String> {
-        let message_id = message.message_id().clone();
-        match self.message_consumer.consume(&message).await {
+    async fn process_message(&self, message: &Message) -> Result<(), String> {
+        let message_id = message.id();
+        match self.message_consumer.consume(message).await {
             Ok(MessageConsumptionOutcome::Succeeded) => {
                 log::info!("Successfully processed message {message_id:?}. Deleting.");
                 self.message_sub_client
-                    .delete_message(&message_id)
+                    .delete_message(message_id)
                     .await
                     .map_err(|e| {
                         format!("Failed to delete message with id {message_id:?} with error {e:?}")
@@ -58,7 +58,7 @@ impl<M: Message> Worker<M> {
             Ok(MessageConsumptionOutcome::Ignored) => {
                 log::debug!("Ignoring message {message_id:?}. Deleting.");
                 self.message_sub_client
-                    .delete_message(&message_id)
+                    .delete_message(message_id)
                     .await
                     .map_err(|e| {
                         format!("Failed to delete message with id {message_id:?} with error {e:?}")
@@ -67,7 +67,7 @@ impl<M: Message> Worker<M> {
             Err(MessageConsumptionError::Transient) => {
                 log::info!("Retrying transient error for message {message_id:?}.");
                 self.message_sub_client
-                    .requeue_message(&message_id)
+                    .requeue_message(message_id)
                     .await
                     .map_err(|e| {
                         format!("Failed to requeue message with id {message_id:?} with error {e:?}")
@@ -76,7 +76,7 @@ impl<M: Message> Worker<M> {
             Err(MessageConsumptionError::Unrecoverable) => {
                 log::info!("Sending unprocessable message {message_id:?} to dead letter queue.");
                 self.message_sub_client
-                    .dlq_message(&message)
+                    .dlq_message(message)
                     .await
                     .map_err(|e| {
                         format!("Failed to send message {message_id:?} to DLQ with error {e:?}")
@@ -90,7 +90,7 @@ impl<M: Message> Worker<M> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_utils::{MockMessage, MockMessageConsumer, MockMessageSubClient};
+    use crate::test_utils::{MockMessageConsumer, MockMessageSubClient};
 
     #[tokio::test]
     async fn test_process_success() {
@@ -99,16 +99,16 @@ mod tests {
         let mc = Arc::new(MockMessageConsumer::return_ok(
             MessageConsumptionOutcome::Succeeded,
         ));
-        let msg = MockMessage;
+        let msg = Message::new("foo", "bar");
         let worker = Worker::new(mf.clone(), mc);
 
         // when
-        let res = worker.process_message(msg).await;
+        let res = worker.process_message(&msg).await;
 
         // then
         assert!(res.is_ok());
         assert_eq!(mf.deleted().len(), 1);
-        assert_eq!(mf.deleted().first().unwrap(), msg.message_id());
+        assert_eq!(mf.deleted().first().unwrap(), msg.id());
     }
 
     #[tokio::test]
@@ -118,16 +118,16 @@ mod tests {
         let mc = Arc::new(MockMessageConsumer::return_ok(
             MessageConsumptionOutcome::Ignored,
         ));
-        let msg = MockMessage;
+        let msg = Message::new("foo", "bar");
         let worker = Worker::new(mf.clone(), mc);
 
         // when
-        let res = worker.process_message(msg).await;
+        let res = worker.process_message(&msg).await;
 
         // then
         assert!(res.is_ok());
         assert_eq!(mf.deleted().len(), 1);
-        assert_eq!(mf.deleted().first().unwrap(), msg.message_id());
+        assert_eq!(mf.deleted().first().unwrap(), msg.id());
     }
 
     #[tokio::test]
@@ -137,16 +137,16 @@ mod tests {
         let mc = Arc::new(MockMessageConsumer::return_err(
             MessageConsumptionError::Transient,
         ));
-        let msg = MockMessage;
+        let msg = Message::new("foo", "bar");
         let worker = Worker::new(mf.clone(), mc);
 
         // when
-        let res = worker.process_message(msg).await;
+        let res = worker.process_message(&msg).await;
 
         // then
         assert!(res.is_ok());
         assert_eq!(mf.requeued().len(), 1);
-        assert_eq!(mf.requeued().first().unwrap(), msg.message_id());
+        assert_eq!(mf.requeued().first().unwrap(), msg.id());
     }
 
     #[tokio::test]
@@ -156,15 +156,15 @@ mod tests {
         let mc = Arc::new(MockMessageConsumer::return_err(
             MessageConsumptionError::Unrecoverable,
         ));
-        let msg = MockMessage;
+        let msg = Message::new("foo", "bar");
         let worker = Worker::new(mf.clone(), mc);
 
         // when
-        let res = worker.process_message(msg).await;
+        let res = worker.process_message(&msg).await;
 
         // then
         assert!(res.is_ok());
         assert_eq!(mf.dlq().len(), 1);
-        assert_eq!(mf.dlq().first().unwrap(), msg.message_id());
+        assert_eq!(mf.dlq().first().unwrap(), msg.id());
     }
 }
