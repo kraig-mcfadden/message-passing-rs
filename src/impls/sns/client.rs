@@ -1,6 +1,6 @@
 use crate::{MessageClientError, MessagePubClient};
 use async_trait::async_trait;
-use aws_sdk_sns::{types::PublishBatchRequestEntry, Client};
+use aws_sdk_sns::{Client, types::PublishBatchRequestEntry};
 
 pub struct MessageClientImplSns {
     sns_client: Client,

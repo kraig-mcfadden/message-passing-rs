@@ -1,7 +1,7 @@
 use crate::{Message, MessageConsumer, MessageConsumptionError, MessageConsumptionOutcome};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use std::sync::Mutex;
 use std::{collections::HashMap, sync::Arc};
 use uuid::Uuid;

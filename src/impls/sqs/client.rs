@@ -1,6 +1,6 @@
 use crate::{Message, MessageClientError, MessagePubClient, MessageSubClient};
 use async_trait::async_trait;
-use aws_sdk_sqs::{types::SendMessageBatchRequestEntry, Client};
+use aws_sdk_sqs::{Client, types::SendMessageBatchRequestEntry};
 
 pub struct MessageClientImplSqs {
     sqs_client: Client,
