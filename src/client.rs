@@ -34,7 +34,7 @@ pub trait MessagePubClient<T: Send + Sync>: Send + Sync {
 pub trait MessageSubClient: Send + Sync {
     async fn get_messages(&self) -> Result<Vec<Message>, MessageClientError>;
 
-    async fn delete_message(&self, message_id: &str) -> Result<(), MessageClientError>;
+    async fn delete_message(&self, receipt_handle: &str) -> Result<(), MessageClientError>;
 
     // in some concrete technologies this will not require any action
     async fn requeue_message(&self, message_id: &str) -> Result<(), MessageClientError>;

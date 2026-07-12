@@ -83,11 +83,11 @@ impl MessageSubClient for MessageClientImplSqs {
     }
 
     // TODO: error handling in unrecoverable case
-    async fn delete_message(&self, message_id: &str) -> Result<(), MessageClientError> {
+    async fn delete_message(&self, receipt_handle: &str) -> Result<(), MessageClientError> {
         self.sqs_client
             .delete_message()
             .queue_url(&self.queue_url)
-            .receipt_handle(message_id)
+            .receipt_handle(receipt_handle)
             .send()
             .await
             .map_err(|_| MessageClientError::Transient)?;

@@ -46,23 +46,24 @@ impl Worker {
 
     async fn process_message(&self, message: &Message) -> Result<(), String> {
         let message_id = message.id();
+        let receipt_handle = message.receipt_handle();
         match self.message_consumer.consume(message).await {
             Ok(MessageConsumptionOutcome::Succeeded) => {
                 log::info!("Successfully processed message {message_id:?}. Deleting.");
                 self.message_sub_client
-                    .delete_message(message_id)
+                    .delete_message(receipt_handle)
                     .await
                     .map_err(|e| {
-                        format!("Failed to delete message with id {message_id:?} with error {e:?}")
+                        format!("Failed to delete message with id {message_id:?} and receipt handle {receipt_handle:?} with error {e:?}")
                     })?;
             }
             Ok(MessageConsumptionOutcome::Ignored) => {
                 log::debug!("Ignoring message {message_id:?}. Deleting.");
                 self.message_sub_client
-                    .delete_message(message_id)
+                    .delete_message(receipt_handle)
                     .await
                     .map_err(|e| {
-                        format!("Failed to delete message with id {message_id:?} with error {e:?}")
+                        format!("Failed to delete message with id {message_id:?} and receipt handle {receipt_handle:?} with error {e:?}")
                     })?;
             }
             Err(MessageConsumptionError::Transient) => {
